@@ -7,7 +7,7 @@ InstaWebhooks - Discord webhooks for Instagram
 
 .. |ci-badge| image:: https://github.com/ryanlua/instawebhooks/actions/workflows/ci.yml/badge.svg
    :target: https://github.com/ryanlua/instawebhooks/actions/workflows/ci.yml
-   :alt: Continuous Integration
+   :alt: CI
 
 .. |pypi-version| image:: https://img.shields.io/pypi/v/instawebhooks
    :target: https://pypi.org/project/instawebhooks/
