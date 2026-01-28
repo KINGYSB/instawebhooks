@@ -214,12 +214,13 @@ async def check_for_new_posts(catchup: int = args.catchup):
         count = 0
         for post in posts:
             if post.shortcode == last_shortcode:
-                logger.info("Found last known post. Stopping fetch.")
                 break
             posts_to_send.append(post)
             count += 1
             if count >= limit:
-                logger.warning("Last known post not found within limit. Stopping fetch.")
+                logger.warning(
+                    "Last known post not found within limit. Stopping fetch."
+                )
                 break
     else:
         since = datetime.now()
