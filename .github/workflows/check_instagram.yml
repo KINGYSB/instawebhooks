@@ -1,11 +1,11 @@
 name: InstaCheck
 on:
   schedule:
-    - cron: '0 * * * *'  # Runs every hour
+    - cron: '0 * * * *' # Runs every hour
   workflow_dispatch:      # Allows you to test it manually
 
 permissions:
-  contents: write       # Allows the bot to save its memory back to the repo
+  contents: write       # CRITICAL: Allows the bot to save memory files
 
 jobs:
   check-insta:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Downloads full history to enable memory saving
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -28,12 +28,14 @@ jobs:
         env:
           SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
-          # Create the standard Linux config directory
+          # 1. Setup the authentication session
           mkdir -p /home/runner/.config/instaloader
-          # Decode the session file into the default location
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
-          # Ensure it has the correct permissions
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
+
+          # 2. Restore memory files from the hidden folder
+          # We copy them to the root folder so the tool can see them
+          cp .memory/last_post_*.txt . || echo "No previous memory files to restore."
 
       - name: Run Check
         env:
@@ -41,8 +43,8 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # We removed the -t flag because it causes the password prompt error.
-          # The tool will find the session for fanofbri372 in the config folder automatically.
+          # We check the latest post (-p 1)
+          # We keep it silent (-c "") to avoid pings
           instawebhooks $USER1 $WEBHOOK -p 1 -c ""
           instawebhooks $USER2 $WEBHOOK -p 1 -c ""
 
@@ -51,13 +53,18 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Add the tracking files (usually .txt) to git memory
-          git add *.txt || echo "No tracking files yet"
+          # 1. Ensure the folder exists
+          mkdir -p .memory
           
-          # Only push if there's a new post to remember
+          # 2. Move updated tracking files into the hidden folder
+          mv last_post_*.txt .memory/ || echo "No new post tracking files found."
+          
+          # 3. Add and Push changes back to GitHub
+          git add .memory/
+          
           if git diff --staged --quiet; then
-            echo "Nothing new to save."
+            echo "Memory is already up to date."
           else
-            git commit -m "Automated memory update: Last seen posts"
+            git commit -m "Automated memory update: Moved to .memory/"
             git push origin main
           fi
