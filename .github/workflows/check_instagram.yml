@@ -28,8 +28,11 @@ jobs:
         run: |
           # Create the folder where Instaloader looks for sessions
           mkdir -p /home/runner/.config/instaloader
-          # Turn your secret back into the actual session file
+          # Turn your secret back into the session file
+          # We name it exactly 'session-fanofbri372'
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
+          # Verify the file exists for the logs
+          ls -l /home/runner/.config/instaloader/
 
       - name: Run Check
         env:
@@ -37,8 +40,8 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # We use -t to tell the tool to use the session file we just restored
-          # No password (-l) needed anymore!
+          # Use the -t flag to point directly to the session name
+          # This tells it to use the session for 'fanofbri372'
           instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372
           instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372
 
