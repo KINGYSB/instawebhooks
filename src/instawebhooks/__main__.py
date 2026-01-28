@@ -346,10 +346,6 @@ async def check_for_new_posts(catchup: int = args.catchup):
         logger.info("No new posts found.")
         return
 
-    # The list is [Newest, ..., Oldest] because the iterator yields newest first.
-    # We want to save the newest shortcode after processing.
-    newest_shortcode = posts_to_send[0].shortcode
-
     async def send_post(post: Post):
         logger.info("New post found: https://www.instagram.com/p/%s", post.shortcode)
         await send_to_discord(post)
@@ -357,9 +353,9 @@ async def check_for_new_posts(catchup: int = args.catchup):
     # Reverse the posts to send oldest first
     for post in reversed(posts_to_send):
         await send_post(post)
+        # Save progress immediately after sending to prevent duplicates if script crashes
+        save_last_shortcode(args.instagram_username, post.shortcode)
         sleep(2)  # Avoid 30 requests per minute rate limit
-
-    save_last_shortcode(args.instagram_username, newest_shortcode)
 
 
 def main():
