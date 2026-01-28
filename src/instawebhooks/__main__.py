@@ -353,7 +353,8 @@ async def check_for_new_posts(catchup: int = args.catchup):
     # Reverse the posts to send oldest first
     for post in reversed(posts_to_send):
         await send_post(post)
-        # Save progress immediately after sending to prevent duplicates if script crashes
+        # Save progress immediately after sending to prevent duplicates
+        # if script crashes
         save_last_shortcode(args.instagram_username, post.shortcode)
         sleep(2)  # Avoid 30 requests per minute rate limit
 
