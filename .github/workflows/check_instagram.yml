@@ -1,11 +1,11 @@
 name: InstaCheck
 on:
   schedule:
-    - cron: '0 * * * *' 
-  workflow_dispatch:
+    - cron: '0 * * * *'  # Runs every hour
+  workflow_dispatch:      # Allows you to test it manually
 
 permissions:
-  contents: write
+  contents: write       # CRITICAL: Allows the bot to save its memory
 
 jobs:
   check-insta:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches full history so it can push updates back
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -26,17 +28,9 @@ jobs:
         env:
           SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
-          # 1. Create the standard Linux config directory
           mkdir -p /home/runner/.config/instaloader
-          
-          # 2. Decode the session file into that EXACT spot
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
-          
-          # 3. Security: Set permissions so the tool can read it
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
-          
-          # 4. Verify it's there
-          ls -la /home/runner/.config/instaloader/
 
       - name: Run Check
         env:
@@ -44,15 +38,23 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # NOTICE: We removed the -t flag entirely.
-          # The tool will now find the session-fanofbri372 file automatically.
-          instawebhooks $USER1 $WEBHOOK -p 1
-          instawebhooks $USER2 $WEBHOOK -p 1
+          # Checks latest post using the restored session
+          # -c "" ensures no everyone/here pings
+          instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372 -c ""
+          instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372 -c ""
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add . 
-          git commit -m "Update last seen posts" || echo "No changes to save"
-          git push
+          
+          # Add tracking files (instawebhooks creates .txt files to track IDs)
+          git add *.txt || echo "No tracking files found yet"
+          
+          # Only commit and push if there is actually a new post to remember
+          if git diff --staged --quiet; then
+            echo "Nothing new to save."
+          else
+            git commit -m "Automated memory update: Last seen posts"
+            git push origin main
+          fi
