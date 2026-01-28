@@ -255,14 +255,27 @@ def fetch_new_posts(
 ) -> None:
     """Fetch new posts until the last known shortcode is found."""
     count = 0
+    # Safety cut-off: Don't look back further than 7 days when resuming.
+    # This prevents the bot from spamming if the 'last_shortcode' post was deleted
+    # or if logic fails, avoiding re-sending years of history.
+    cutoff_date = datetime.now() - timedelta(days=7)
+
     try:
         for post in posts:
+            # First check if we hit the date limit
+            if post.date < cutoff_date:
+                logger.warning(
+                    "Reached posts older than 7 days without finding last shortcode. Stopping."
+                )
+                break
+
+            if post.shortcode == last_shortcode:
+                break
+
             # Skip pinned posts, as they are not the newest posts
             if post.is_pinned:
                 continue
 
-            if post.shortcode == last_shortcode:
-                break
             posts_to_send.append(post)
             count += 1
             if count >= limit:
