@@ -1,0 +1,41 @@
+name: InstaCheck
+on:
+  schedule:
+    - cron: '0 * * * *' 
+  workflow_dispatch:
+
+permissions:
+  contents: write  # This allows GitHub to save the "memory" file
+
+jobs:
+  check-insta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Tool
+        run: pip install instawebhooks
+
+      - name: Run Check
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          USER1: ${{ secrets.INSTA_USER }}
+          USER2: ${{ secrets.INSTA_USER_2 }}
+        run: |
+          instawebhooks --iterations 1 $USER1 $WEBHOOK
+          instawebhooks --iterations 1 $USER2 $WEBHOOK
+
+      - name: Save Memory
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          # This saves any '.txt' or '.json' files the tool created
+          git add . 
+          git commit -m "Update last seen posts" || echo "No new posts to save"
+          git push
