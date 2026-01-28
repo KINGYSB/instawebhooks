@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/python-version@v4
         with:
           python-version: '3.10'
       
@@ -32,40 +32,52 @@ jobs:
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
           
-          # 1. Bring files OUT of hiding so the tool can see them
+          # Bring files out of the hidden folder so we can compare them
           mkdir -p .memory
-          cp .memory/last_post_*.txt . || echo "No previous memory files to restore."
-          
-          # 2. Verify they are in the root folder
-          ls -la last_post_*.txt || echo "Root is empty."
+          cp .memory/last_post_*.txt . || echo "First run: No memory files found."
 
-      - name: Run and Force ID Capture
+      - name: Gatekeeper Check
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # If the file exists in root, the tool should now say "No new posts"
-          timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" > log1.txt 2>&1 || true
-          timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" > log2.txt 2>&1 || true
+          # 1. Fetch current IDs from Instagram without sending a webhook
+          # We use instaloader to grab the most recent post ID from the filename it generates
+          ID1=$(instaloader --no-posts --count=1 $U1 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
+          ID2=$(instaloader --no-posts --count=1 $U2 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
 
-          # Update the files with whatever the latest ID is
-          grep -oP '/p/\K[^/ ]+' log1.txt > last_post_$U1.txt || echo "Keeping old ID for $U1"
-          grep -oP '/p/\K[^/ ]+' log2.txt > last_post_$U2.txt || echo "Keeping old ID for $U2"
+          # 2. Logic for User 1
+          if [ "$ID1" == "$(cat last_post_$U1.txt 2>/dev/null)" ]; then
+            echo "No new posts for $U1. Staying silent."
+          else
+            echo "NEW post for $U1! Sending to Discord..."
+            timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" || true
+            echo "$ID1" > last_post_$U1.txt
+          fi
+
+          # 3. Logic for User 2
+          if [ "$ID2" == "$(cat last_post_$U2.txt 2>/dev/null)" ]; then
+            echo "No new posts for $U2. Staying silent."
+          else
+            echo "NEW post for $U2! Sending to Discord..."
+            timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" || true
+            echo "$ID2" > last_post_$U2.txt
+          fi
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          mkdir -p .memory
           
-          # Move them back into the hidden folder for the next run
-          mv last_post_*.txt .memory/ || echo "Nothing to move."
+          mkdir -p .memory
+          # Move the (possibly updated) IDs back to the hidden folder
+          mv last_post_*.txt .memory/ || echo "Nothing to save."
           
           git add .memory/
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Automated memory update: Handled persistence"
+            git commit -m "Automated memory update: Gatekeeper bypass"
             git push origin main
           fi
