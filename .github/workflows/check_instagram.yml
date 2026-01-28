@@ -24,38 +24,36 @@ jobs:
       - name: Install Tool
         run: pip install instawebhooks instaloader
 
-      - name: Restore Session & Memory
+      - name: Restore Session
         env:
           SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
-          # Setup Insta session to avoid rate limits
           mkdir -p /home/runner/.config/instaloader
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
-          
-          # Restore tracking files from repository
           mkdir -p .memory
-          cp .memory/last_post_*.txt . || echo "First run: No memory files found."
+          # Bring the old memory files back so the tool doesn't double-post
+          cp .memory/last_post_*.txt . || echo "No memory found yet."
 
-      - name: Gatekeeper Logic
+      - name: Check and Post
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Function to check and post for a user
           check_user() {
             USERNAME=$1
             MEMORY_FILE=".memory/last_post_${USERNAME}.txt"
             
-            echo "Checking $USERNAME..."
+            echo "=== Checking $USERNAME ==="
             
-            # Fetch the latest post shortcode using Python API
-            LATEST_POST=$(python3 << 'PYEOF'
+            # Get latest post ID using Python
+            LATEST_POST=$(USERNAME="$USERNAME" python3 << 'PYEOF'
 import instaloader
+import os
 L = instaloader.Instaloader()
 L.load_session_from_file('fanofbri372', '/home/runner/.config/instaloader/session-fanofbri372')
-profile = instaloader.Profile.from_username(L.context, '$USERNAME')
+profile = instaloader.Profile.from_username(L.context, os.environ['USERNAME'])
 posts = profile.get_posts()
 try:
     latest = next(iter(posts))
@@ -66,27 +64,25 @@ PYEOF
 )
             
             if [ -z "$LATEST_POST" ]; then
-              echo "Could not fetch latest post for $USERNAME"
+              echo "❌ Could not fetch latest post for $USERNAME"
               return
             fi
             
-            echo "Latest post shortcode: $LATEST_POST"
+            echo "Latest post: $LATEST_POST"
             
-            # Check if this post shortcode is already in memory
+            # Check if already posted
             if [ -f "$MEMORY_FILE" ] && grep -Fxq "$LATEST_POST" "$MEMORY_FILE"; then
-              echo "Post $LATEST_POST already sent for $USERNAME. Skipping."
+              echo "✓ Already sent. Skipping."
             else
-              echo "NEW post detected for $USERNAME! Sending webhook..."
+              echo "🆕 NEW POST! Sending to Discord..."
               timeout 60s instawebhooks $USERNAME $WEBHOOK -p 1 -c "" || true
               
-              # Add to memory (append, not overwrite)
-              mkdir -p .memory
-              echo "$LATEST_POST" >> "$MEMORY_FILE"
-              echo "Saved $LATEST_POST to memory for $USERNAME."
+              # Save to memory
+              echo "$LATEST_POST" > "$MEMORY_FILE"
+              echo "✓ Saved to memory"
             fi
             
-            # Small delay between users
-            sleep 10
+            sleep 5
           }
           
           # Check both users
@@ -99,6 +95,7 @@ PYEOF
           git config --global user.email "action@github.com"
           
           git add .memory/
+          
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
