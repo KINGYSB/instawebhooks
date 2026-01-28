@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/python-version@v4
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
@@ -32,7 +32,7 @@ jobs:
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
           
-          # Bring files out of the hidden folder so we can compare them
+          # Bring memory files out of the hidden folder
           mkdir -p .memory
           cp .memory/last_post_*.txt . || echo "First run: No memory files found."
 
@@ -42,8 +42,7 @@ jobs:
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # 1. Fetch current IDs from Instagram without sending a webhook
-          # We use instaloader to grab the most recent post ID from the filename it generates
+          # 1. Fetch current IDs from Instagram
           ID1=$(instaloader --no-posts --count=1 $U1 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
           ID2=$(instaloader --no-posts --count=1 $U2 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
 
@@ -71,13 +70,13 @@ jobs:
           git config --global user.email "action@github.com"
           
           mkdir -p .memory
-          # Move the (possibly updated) IDs back to the hidden folder
+          # Move files back to the hidden folder for next time
           mv last_post_*.txt .memory/ || echo "Nothing to save."
           
           git add .memory/
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Automated memory update: Gatekeeper bypass"
+            git commit -m "Automated memory update: Corrected Action"
             git push origin main
           fi
