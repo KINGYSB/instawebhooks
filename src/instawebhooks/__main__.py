@@ -248,6 +248,41 @@ async def send_to_discord(post: Post):
     logger.info("New post sent to Discord successfully.")
 
 
+def fetch_new_posts(
+    posts, last_shortcode: str, posts_to_send: List[Post], limit: int = 50
+) -> None:
+    """Fetch new posts until the last known shortcode is found."""
+    count = 0
+    try:
+        for post in posts:
+            # Skip pinned posts, as they are not the newest posts
+            if post.is_pinned:
+                continue
+
+            if post.shortcode == last_shortcode:
+                break
+            posts_to_send.append(post)
+            count += 1
+            if count >= limit:
+                logger.warning(
+                    "Last known post not found within limit. Stopping fetch."
+                )
+                break
+    except (
+        instaloader.exceptions.ConnectionException,
+        instaloader.exceptions.QueryReturnedBadRequestException,
+    ) as error:
+        logger.warning(
+            "Connection error while fetching posts "
+            "(likely rate limit or end of stream): %s",
+            error,
+        )
+        logger.warning(
+            "Stopping fetch for %s and processing gathered posts.",
+            args.instagram_username,
+        )
+
+
 async def check_for_new_posts(catchup: int = args.catchup):
     """Check for new Instagram posts and send them to Discord"""
 
@@ -262,26 +297,7 @@ async def check_for_new_posts(catchup: int = args.catchup):
 
     if last_shortcode:
         logger.info("Resuming from last known post: %s", last_shortcode)
-        limit = 50  # Safety limit to prevent fetching entire history if post deleted
-        count = 0
-        try:
-            for post in posts:
-                # Skip pinned posts, as they are not the newest posts
-                if post.is_pinned:
-                    continue
-
-                if post.shortcode == last_shortcode:
-                    break
-                posts_to_send.append(post)
-                count += 1
-                if count >= limit:
-                    logger.warning(
-                        "Last known post not found within limit. Stopping fetch."
-                    )
-                    break
-        except (instaloader.exceptions.ConnectionException, instaloader.exceptions.QueryReturnedBadRequestException) as e:
-            logger.warning("Connection error while fetching posts (likely rate limit or end of stream): %s", e)
-            logger.warning("Stopping fetch for %s and processing gathered posts.", args.instagram_username)
+        fetch_new_posts(posts, last_shortcode, posts_to_send)
     else:
         since = datetime.now()
         until = datetime.now() - timedelta(seconds=args.refresh_interval)
