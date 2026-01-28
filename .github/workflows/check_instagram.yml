@@ -31,9 +31,13 @@ jobs:
           mkdir -p /home/runner/.config/instaloader
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
+          
+          # 1. Bring files OUT of hiding so the tool can see them
           mkdir -p .memory
-          # Bring the old memory files back so the tool doesn't double-post
-          cp .memory/last_post_*.txt . || echo "No memory found yet."
+          cp .memory/last_post_*.txt . || echo "No previous memory files to restore."
+          
+          # 2. Verify they are in the root folder
+          ls -la last_post_*.txt || echo "Root is empty."
 
       - name: Run and Force ID Capture
         env:
@@ -41,29 +45,27 @@ jobs:
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Run the checks and dump output to a log we can read
+          # If the file exists in root, the tool should now say "No new posts"
           timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" > log1.txt 2>&1 || true
           timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" > log2.txt 2>&1 || true
 
-          # Extract the ID from the URL in the log (e.g., /p/DL8cYj7Mvo8)
-          grep -oP '/p/\K[^/ ]+' log1.txt > last_post_$U1.txt || echo "Failed to grab ID for $U1"
-          grep -oP '/p/\K[^/ ]+' log2.txt > last_post_$U2.txt || echo "Failed to grab ID for $U2"
+          # Update the files with whatever the latest ID is
+          grep -oP '/p/\K[^/ ]+' log1.txt > last_post_$U1.txt || echo "Keeping old ID for $U1"
+          grep -oP '/p/\K[^/ ]+' log2.txt > last_post_$U2.txt || echo "Keeping old ID for $U2"
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          
           mkdir -p .memory
           
-          # Move whatever files were just generated into the hidden folder
-          mv last_post_*.txt .memory/ || echo "Nothing found to move."
+          # Move them back into the hidden folder for the next run
+          mv last_post_*.txt .memory/ || echo "Nothing to move."
           
           git add .memory/
-          
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Automated memory update: Forced via Log Scraping"
+            git commit -m "Automated memory update: Handled persistence"
             git push origin main
           fi
