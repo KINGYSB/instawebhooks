@@ -24,59 +24,50 @@ jobs:
       - name: Install Tool
         run: pip install instawebhooks instaloader
 
-      - name: Restore Session
-        env:
-          SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
+      - name: Restore Memory
         run: |
-          mkdir -p /home/runner/.config/instaloader
-          echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
-          chmod 600 /home/runner/.config/instaloader/session-fanofbri372
-          
-          # Bring memory files out of the hidden folder
           mkdir -p .memory
-          cp .memory/last_post_*.txt . || echo "First run: No memory files found."
+          # Bring files out of hiding so we can compare them
+          cp .memory/last_post_*.txt . || echo "No memory files found yet."
 
-      - name: Gatekeeper Check
+      - name: Gatekeeper Logic
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # 1. Fetch current IDs from Instagram
+          # Grab latest IDs from Instagram
           ID1=$(instaloader --no-posts --count=1 $U1 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
           ID2=$(instaloader --no-posts --count=1 $U2 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
 
-          # 2. Logic for User 1
-          if [ "$ID1" == "$(cat last_post_$U1.txt 2>/dev/null)" ]; then
-            echo "No new posts for $U1. Staying silent."
-          else
-            echo "NEW post for $U1! Sending to Discord..."
+          # User 1 Check: Post only if ID is missing from memory
+          if [ "$ID1" != "$(cat last_post_$U1.txt 2>/dev/null)" ]; then
+            echo "NEW post detected for $U1! Sending webhook..."
             timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" || true
             echo "$ID1" > last_post_$U1.txt
+          else
+            echo "ID $ID1 already in memory for $U1. Skipping."
           fi
 
-          # 3. Logic for User 2
-          if [ "$ID2" == "$(cat last_post_$U2.txt 2>/dev/null)" ]; then
-            echo "No new posts for $U2. Staying silent."
-          else
-            echo "NEW post for $U2! Sending to Discord..."
+          # User 2 Check: Post only if ID is missing from memory
+          if [ "$ID2" != "$(cat last_post_$U2.txt 2>/dev/null)" ]; then
+            echo "NEW post detected for $U2! Sending webhook..."
             timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" || true
             echo "$ID2" > last_post_$U2.txt
+          else
+            echo "ID $ID2 already in memory for $U2. Skipping."
           fi
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          
           mkdir -p .memory
-          # Move files back to the hidden folder for next time
           mv last_post_*.txt .memory/ || echo "Nothing to save."
-          
           git add .memory/
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Automated memory update: Corrected Action"
+            git commit -m "Automated memory update: New post ID added"
             git push origin main
           fi
