@@ -47,24 +47,24 @@ jobs:
             
             echo "=== Checking $USERNAME ==="
             
-            # Get latest post ID using Python
-            LATEST_POST=$(USERNAME="$USERNAME" python3 << 'PYEOF'
+            # Use Python to get latest post ID
+            python3 -c "
 import instaloader
-import os
 L = instaloader.Instaloader()
 L.load_session_from_file('fanofbri372', '/home/runner/.config/instaloader/session-fanofbri372')
-profile = instaloader.Profile.from_username(L.context, os.environ['USERNAME'])
+profile = instaloader.Profile.from_username(L.context, '$USERNAME')
 posts = profile.get_posts()
 try:
     latest = next(iter(posts))
     print(latest.shortcode)
-except StopIteration:
+except:
     pass
-PYEOF
-)
+" > /tmp/latest_id.txt 2>/dev/null
+            
+            LATEST_POST=$(cat /tmp/latest_id.txt)
             
             if [ -z "$LATEST_POST" ]; then
-              echo "❌ Could not fetch latest post for $USERNAME"
+              echo "Could not fetch latest post"
               return
             fi
             
@@ -72,20 +72,17 @@ PYEOF
             
             # Check if already posted
             if [ -f "$MEMORY_FILE" ] && grep -Fxq "$LATEST_POST" "$MEMORY_FILE"; then
-              echo "✓ Already sent. Skipping."
+              echo "Already sent. Skipping."
             else
-              echo "🆕 NEW POST! Sending to Discord..."
+              echo "NEW POST! Sending to Discord..."
               timeout 60s instawebhooks $USERNAME $WEBHOOK -p 1 -c "" || true
-              
-              # Save to memory
               echo "$LATEST_POST" > "$MEMORY_FILE"
-              echo "✓ Saved to memory"
+              echo "Saved to memory"
             fi
             
             sleep 5
           }
           
-          # Check both users
           check_user "$U1"
           check_user "$U2"
 
