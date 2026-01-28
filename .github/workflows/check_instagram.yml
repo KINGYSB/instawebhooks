@@ -1,11 +1,11 @@
 name: InstaCheck
 on:
   schedule:
-    - cron: '0 * * * *'  # Runs every hour
-  workflow_dispatch:      # Allows you to click a button to test it manually
+    - cron: '0 * * * *' 
+  workflow_dispatch:
 
 permissions:
-  contents: write       # Required to save memory of last seen posts
+  contents: write
 
 jobs:
   check-insta:
@@ -20,25 +20,32 @@ jobs:
           python-version: '3.10'
       
       - name: Install Tool
-        run: pip install instawebhooks
+        run: pip install instawebhooks instaloader
+
+      - name: Restore Session
+        env:
+          SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
+        run: |
+          # Create the folder where Instaloader looks for sessions
+          mkdir -p /home/runner/.config/instaloader
+          # Turn your secret back into the actual session file
+          echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
 
       - name: Run Check
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
-          # These grab your new login secrets
-          IG_USER: ${{ secrets.IG_USERNAME }}
-          IG_PASS: ${{ secrets.IG_PASSWORD }}
         run: |
-          # Use -l to login and -p 1 to check the latest post
-          instawebhooks $USER1 $WEBHOOK -p 1 -l $IG_USER $IG_PASS
-          instawebhooks $USER2 $WEBHOOK -p 1 -l $IG_USER $IG_PASS
+          # We use -t to tell the tool to use the session file we just restored
+          # No password (-l) needed anymore!
+          instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372
+          instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add . 
-          git commit -m "Update last seen posts" || echo "No new posts to save"
+          git commit -m "Update last seen posts" || echo "No changes to save"
           git push
