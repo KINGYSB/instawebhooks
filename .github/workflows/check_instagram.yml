@@ -24,11 +24,18 @@ jobs:
       - name: Install Tool
         run: pip install instawebhooks instaloader
 
-      - name: Restore Memory
+      - name: Restore Session & Memory
+        env:
+          SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
+          # Setup Insta session to avoid rate limits
+          mkdir -p /home/runner/.config/instaloader
+          echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
+          chmod 600 /home/runner/.config/instaloader/session-fanofbri372
+          
+          # Restore tracking files from repository
           mkdir -p .memory
-          # Bring files out of hiding so we can compare them
-          cp .memory/last_post_*.txt . || echo "No memory files found yet."
+          cp .memory/last_post_*.txt . || echo "First run: No memory files found."
 
       - name: Gatekeeper Logic
         env:
@@ -36,38 +43,51 @@ jobs:
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Grab latest IDs from Instagram
-          ID1=$(instaloader --no-posts --count=1 $U1 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
-          ID2=$(instaloader --no-posts --count=1 $U2 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
+          # 1. Fetch current IDs using the session file
+          # The -f flag tells instaloader to use your login data
+          SESSION="-f /home/runner/.config/instaloader/session-fanofbri372"
 
-          # User 1 Check: Post only if ID is missing from memory
-          if [ "$ID1" != "$(cat last_post_$U1.txt 2>/dev/null)" ]; then
-            echo "NEW post detected for $U1! Sending webhook..."
+          echo "Checking $U1..."
+          ID1=$(instaloader $SESSION --no-posts --count=1 $U1 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
+          
+          # Small delay to prevent Instagram from flagging the runner IP
+          sleep 10
+
+          echo "Checking $U2..."
+          ID2=$(instaloader $SESSION --no-posts --count=1 $U2 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
+
+          # 2. Comparison Logic: Only post if the ID is NOT in memory
+          
+          # User 1 Check
+          if [ -n "$ID1" ] && [ "$ID1" != "$(cat last_post_$U1.txt 2>/dev/null)" ]; then
+            echo "NEW post detected for $U1 ($ID1)! Sending webhook..."
             timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" || true
             echo "$ID1" > last_post_$U1.txt
           else
-            echo "ID $ID1 already in memory for $U1. Skipping."
+            echo "No new posts or rate-limited for $U1. Memory: $(cat last_post_$U1.txt 2>/dev/null)"
           fi
 
-          # User 2 Check: Post only if ID is missing from memory
-          if [ "$ID2" != "$(cat last_post_$U2.txt 2>/dev/null)" ]; then
-            echo "NEW post detected for $U2! Sending webhook..."
+          # User 2 Check
+          if [ -n "$ID2" ] && [ "$ID2" != "$(cat last_post_$U2.txt 2>/dev/null)" ]; then
+            echo "NEW post detected for $U2 ($ID2)! Sending webhook..."
             timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" || true
             echo "$ID2" > last_post_$U2.txt
           else
-            echo "ID $ID2 already in memory for $U2. Skipping."
+            echo "No new posts or rate-limited for $U2. Memory: $(cat last_post_$U2.txt 2>/dev/null)"
           fi
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
+          
           mkdir -p .memory
           mv last_post_*.txt .memory/ || echo "Nothing to save."
+          
           git add .memory/
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Automated memory update: New post ID added"
+            git commit -m "Automated memory update: Gatekeeper bypass with session"
             git push origin main
           fi
