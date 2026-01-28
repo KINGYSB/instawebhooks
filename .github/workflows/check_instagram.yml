@@ -30,8 +30,8 @@ jobs:
           mkdir -p /home/runner/.config/instaloader
           # Turn your secret back into the session file
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
-          # Verify the file is actually there so we can see it in logs
-          ls -la /home/runner/.config/instaloader/
+          # Place a copy in the local folder for redundancy
+          cp /home/runner/.config/instaloader/session-fanofbri372 ./session-fanofbri372
 
       - name: Run Check
         env:
@@ -39,8 +39,7 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # We use -t fanofbri372 to force it to use that session file
-          # -p 1 ensures it only checks the most recent post
+          # Use -t to point to the session file we restored
           instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372
           instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372
 
