@@ -1,11 +1,11 @@
 name: InstaCheck
 on:
   schedule:
-    - cron: '0 * * * *' 
-  workflow_dispatch:
+    - cron: '0 * * * *'  # Runs every hour
+  workflow_dispatch:      # Allows you to test it manually
 
 permissions:
-  contents: write
+  contents: write       # Required to save memory of last seen posts
 
 jobs:
   check-insta:
@@ -34,9 +34,6 @@ jobs:
           
           # 3. Security: Set permissions so the tool can read it
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
-          
-          # 4. Verify it's there
-          ls -la /home/runner/.config/instaloader/
 
       - name: Run Check
         env:
@@ -44,10 +41,11 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # NOTICE: We removed the -t flag entirely.
-          # The tool will now find the session-fanofbri372 file automatically.
-          instawebhooks $USER1 $WEBHOOK -p 1
-          instawebhooks $USER2 $WEBHOOK -p 1
+          # -p 1 checks only the latest post
+          # -t uses the restored session for fanofbri372
+          # -c "" ensures the message is silent and doesn't ping anyone
+          instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372 -c ""
+          instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372 -c ""
 
       - name: Save Memory
         run: |
