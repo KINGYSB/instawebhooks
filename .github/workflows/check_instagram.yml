@@ -5,7 +5,7 @@ on:
   workflow_dispatch:      # Allows you to click a button to test it manually
 
 permissions:
-  contents: write       # This is required so the "Save Memory" step works
+  contents: write       # Required to save memory of last seen posts
 
 jobs:
   check-insta:
@@ -27,16 +27,18 @@ jobs:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
+          # These grab your new login secrets
+          IG_USER: ${{ secrets.IG_USERNAME }}
+          IG_PASS: ${{ secrets.IG_PASSWORD }}
         run: |
-          # We use -p 1 to check only the latest post and avoid the regex error
-          instawebhooks $USER1 $WEBHOOK -p 1
-          instawebhooks $USER2 $WEBHOOK -p 1
+          # Use -l to login and -p 1 to check the latest post
+          instawebhooks $USER1 $WEBHOOK -p 1 -l $IG_USER $IG_PASS
+          instawebhooks $USER2 $WEBHOOK -p 1 -l $IG_USER $IG_PASS
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          # This saves any '.txt' or '.json' files the tool created
           git add . 
           git commit -m "Update last seen posts" || echo "No new posts to save"
           git push
