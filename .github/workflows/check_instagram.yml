@@ -22,7 +22,10 @@ jobs:
           python-version: '3.10'
       
       - name: Install Tool
-        run: pip install instawebhooks instaloader
+        run: |
+          # Install from local directory (.) to ensure memory fixes are used
+          pip install . 
+          pip install instaloader
 
       - name: Restore Session
         env:
@@ -31,77 +34,31 @@ jobs:
           mkdir -p /home/runner/.config/instaloader
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
+          # Ensure .memory directory exists (though checkout should handle it)
           mkdir -p .memory
-          # Bring the old memory files back so the tool doesn't double-post
-          cp .memory/last_post_*.txt . || echo "No memory found yet."
 
-      - name: Check and Post
+      - name: Run Checks
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          check_user() {
-            USERNAME=$1
-            MEMORY_FILE=".memory/last_post_${USERNAME}.txt"
-            
-            echo "=== Checking $USERNAME ==="
-            
-            # Create python script to fetch latest post ID
-            # formatting: EOF must be at start of line in generated script (aligned with check_user)
-            cat > get_latest_post.py << 'EOF'
-import instaloader
-import sys
-
-# Suppress stderr to keep logs clean
-sys.stderr = open('/dev/null', 'w')
-
-try:
-    L = instaloader.Instaloader()
-    L.load_session_from_file('fanofbri372', '/home/runner/.config/instaloader/session-fanofbri372')
-    profile = instaloader.Profile.from_username(L.context, sys.argv[1])
-    posts = profile.get_posts()
-    latest = next(iter(posts))
-    print(latest.shortcode)
-except:
-    pass
-EOF
-
-            LATEST_POST=$(python3 get_latest_post.py "$USERNAME")
-            
-            if [ -z "$LATEST_POST" ]; then
-              echo "Could not fetch latest post"
-              return
-            fi
-            
-            echo "Latest post: $LATEST_POST"
-            
-            # Check if already posted
-            if [ -f "$MEMORY_FILE" ] && grep -Fxq "$LATEST_POST" "$MEMORY_FILE"; then
-              echo "Already sent. Skipping."
-            else
-              echo "NEW POST! Sending to Discord..."
-              timeout 60s instawebhooks $USERNAME $WEBHOOK -p 1 -c "" || true
-              echo "$LATEST_POST" > "$MEMORY_FILE"
-              echo "Saved to memory"
-            fi
-            
-            sleep 5
-          }
-          
-          check_user "$U1"
-          check_user "$U2"
+          # Run the tool directly. It now handles reading/writing .memory/ files internally.
+          # catchup (-p 1) will only trigger if no memory file exists for that user.
+          timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" || true
+          timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" || true
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
+          # The python script updated the files in .memory/ directly
           git add .memory/
           
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Update posted Instagram IDs"
+            git commit -m "Automated memory update"
             git push origin main
           fi

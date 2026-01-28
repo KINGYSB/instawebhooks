@@ -3,6 +3,7 @@
 import asyncio
 import io
 import logging
+import os
 import re
 import sys
 from datetime import datetime, timedelta
@@ -70,6 +71,36 @@ if args.no_embed and args.message_content == "":
     raise SystemExit(
         "Please provide a message content with the --message-content flag."
     )
+
+
+def get_memory_path(username: str) -> str:
+    """Get path to the memory file for a username"""
+    memory_dir = ".memory"
+    os.makedirs(memory_dir, exist_ok=True)
+    return os.path.join(memory_dir, f"last_post_{username}.txt")
+
+
+def load_last_shortcode(username: str) -> str | None:
+    """Load the last processed shortcode from memory"""
+    path = get_memory_path(username)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                return content if content else None
+        except IOError:
+            logger.warning("Failed to read memory file.")
+    return None
+
+
+def save_last_shortcode(username: str, shortcode: str):
+    """Save the last processed shortcode to memory"""
+    path = get_memory_path(username)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(shortcode)
+    except IOError:
+        logger.warning("Failed to write memory file.")
 
 
 async def create_embed(post: Post):
@@ -174,36 +205,55 @@ async def check_for_new_posts(catchup: int = args.catchup):
         Instaloader().context, args.instagram_username
     ).get_posts()
 
-    since = datetime.now()
-    until = datetime.now() - timedelta(seconds=args.refresh_interval)
+    last_shortcode = load_last_shortcode(args.instagram_username)
+    posts_to_send: List[Post] = []
 
-    new_posts_found = False
+    if last_shortcode:
+        logger.info("Resuming from last known post: %s", last_shortcode)
+        limit = 50  # Safety limit to prevent fetching entire history if post deleted
+        count = 0
+        for post in posts:
+            if post.shortcode == last_shortcode:
+                logger.info("Found last known post. Stopping fetch.")
+                break
+            posts_to_send.append(post)
+            count += 1
+            if count >= limit:
+                logger.warning("Last known post not found within limit. Stopping fetch.")
+                break
+    else:
+        since = datetime.now()
+        until = datetime.now() - timedelta(seconds=args.refresh_interval)
+
+        if catchup > 0:
+            logger.info("Sending last %s posts on startup...", catchup)
+            for post in takewhile(lambda _: catchup > 0, posts):
+                posts_to_send.append(post)
+                catchup -= 1
+        else:
+            for post in takewhile(
+                lambda p: p.date > until, dropwhile(lambda p: p.date > since, posts)
+            ):
+                posts_to_send.append(post)
+
+    if not posts_to_send:
+        logger.info("No new posts found.")
+        return
+
+    # The list is [Newest, ..., Oldest] because the iterator yields newest first.
+    # We want to save the newest shortcode after processing.
+    newest_shortcode = posts_to_send[0].shortcode
 
     async def send_post(post: Post):
         logger.info("New post found: https://www.instagram.com/p/%s", post.shortcode)
         await send_to_discord(post)
 
-    if catchup > 0:
-        logger.info("Sending last %s posts on startup...", catchup)
-        posts_to_send: List[Post] = []
-        for post in takewhile(lambda _: catchup > 0, posts):
-            posts_to_send.append(post)
-            catchup -= 1
-
-        # Reverse the posts to send oldest first
-        for post in reversed(posts_to_send):
-            await send_post(post)
-            sleep(2)  # Avoid 30 requests per minute rate limit
-
-    for post in takewhile(
-        lambda p: p.date > until, dropwhile(lambda p: p.date > since, posts)
-    ):
-        new_posts_found = True
+    # Reverse the posts to send oldest first
+    for post in reversed(posts_to_send):
         await send_post(post)
         sleep(2)  # Avoid 30 requests per minute rate limit
 
-    if not new_posts_found:
-        logger.info("No new posts found.")
+    save_last_shortcode(args.instagram_username, newest_shortcode)
 
 
 def main():
