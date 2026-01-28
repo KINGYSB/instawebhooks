@@ -32,44 +32,46 @@ except ModuleNotFoundError as exc:
 # Monkey patch instaloader with updated user agents
 def patched_default_user_agent() -> str:
     """Return a patched user agent string."""
-    return ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36')
+    return (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+    )
 
 
 def patched_default_iphone_headers() -> Dict[str, Any]:
     """Return patched iPhone headers."""
     return {
-        'User-Agent': (
-            'Instagram 361.0.0.35.82 (iPad13,8; iOS 18_0; en_US; en-US; '
-            'scale=2.00; 2048x2732; 674117118) AppleWebKit/420+'
+        "User-Agent": (
+            "Instagram 361.0.0.35.82 (iPad13,8; iOS 18_0; en_US; en-US; "
+            "scale=2.00; 2048x2732; 674117118) AppleWebKit/420+"
         ),
-        'x-ads-opt-out': '1',
-        'x-bloks-is-panorama-enabled': 'true',
-        'x-bloks-version-id': (
-            '16b7bd25c6c06886d57c4d455265669345a2d96625385b8ee30026ac2dc5ed97'
+        "x-ads-opt-out": "1",
+        "x-bloks-is-panorama-enabled": "true",
+        "x-bloks-version-id": (
+            "16b7bd25c6c06886d57c4d455265669345a2d96625385b8ee30026ac2dc5ed97"
         ),
-        'x-fb-client-ip': 'True',
-        'x-fb-connection-type': 'wifi',
-        'x-fb-http-engine': 'Liger',
-        'x-fb-server-cluster': 'True',
-        'x-fb': '1',
-        'x-ig-abr-connection-speed-kbps': '2',
-        'x-ig-app-id': '124024574287414',
-        'x-ig-app-locale': 'en-US',
-        'x-ig-app-startup-country': 'US',
-        'x-ig-bandwidth-speed-kbps': '0.000',
-        'x-ig-capabilities': '36r/F/8=',
-        'x-ig-connection-speed': f'{random.randint(1000, 20000)}kbps',
-        'x-ig-connection-type': 'WiFi',
-        'x-ig-device-locale': 'en-US',
-        'x-ig-mapped-locale': 'en-US',
-        'x-ig-timezone-offset': str(
+        "x-fb-client-ip": "True",
+        "x-fb-connection-type": "wifi",
+        "x-fb-http-engine": "Liger",
+        "x-fb-server-cluster": "True",
+        "x-fb": "1",
+        "x-ig-abr-connection-speed-kbps": "2",
+        "x-ig-app-id": "124024574287414",
+        "x-ig-app-locale": "en-US",
+        "x-ig-app-startup-country": "US",
+        "x-ig-bandwidth-speed-kbps": "0.000",
+        "x-ig-capabilities": "36r/F/8=",
+        "x-ig-connection-speed": f"{random.randint(1000, 20000)}kbps",
+        "x-ig-connection-type": "WiFi",
+        "x-ig-device-locale": "en-US",
+        "x-ig-mapped-locale": "en-US",
+        "x-ig-timezone-offset": str(
             (datetime.now().astimezone().utcoffset() or timedelta(seconds=0)).seconds
         ),
-        'x-ig-www-claim': '0',
-        'x-pigeon-session-id': str(uuid.uuid4()),
-        'x-tigon-is-retry': 'False',
-        'x-whatsapp': '0',
+        "x-ig-www-claim": "0",
+        "x-pigeon-session-id": str(uuid.uuid4()),
+        "x-tigon-is-retry": "False",
+        "x-whatsapp": "0",
     }
 
 
