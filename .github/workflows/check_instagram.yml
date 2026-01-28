@@ -50,9 +50,20 @@ jobs:
             
             echo "Checking $USERNAME..."
             
-            # Fetch the latest post shortcode using instaloader
-            SESSION="-f /home/runner/.config/instaloader/session-fanofbri372"
-            LATEST_POST=$(instaloader $SESSION --no-posts --count=1 $USERNAME 2>&1 | grep -oP '(?<=instagram\.com/p/)[A-Za-z0-9_-]+' | head -n 1 || echo "")
+            # Fetch the latest post shortcode using Python API
+            LATEST_POST=$(python3 << 'PYEOF'
+import instaloader
+L = instaloader.Instaloader()
+L.load_session_from_file('fanofbri372', '/home/runner/.config/instaloader/session-fanofbri372')
+profile = instaloader.Profile.from_username(L.context, '$USERNAME')
+posts = profile.get_posts()
+try:
+    latest = next(iter(posts))
+    print(latest.shortcode)
+except StopIteration:
+    pass
+PYEOF
+)
             
             if [ -z "$LATEST_POST" ]; then
               echo "Could not fetch latest post for $USERNAME"
