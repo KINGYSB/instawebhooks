@@ -304,9 +304,22 @@ async def check_for_new_posts(catchup: int = args.catchup):
 
     logger.info("Checking for new posts")
 
-    posts = Profile.from_username(
-        Instaloader().context, args.instagram_username
-    ).get_posts()
+    try:
+        posts = Profile.from_username(
+            Instaloader().context, args.instagram_username
+        ).get_posts()
+    except (
+        instaloader.exceptions.ConnectionException,
+        instaloader.exceptions.QueryReturnedBadRequestException,
+        instaloader.exceptions.ProfileNotExistsException,
+        LoginRequiredException,
+    ) as e:
+        logger.error(
+            "Error collecting profile info for %s: %s. Skipping this run.",
+            args.instagram_username,
+            e,
+        )
+        return
 
     last_shortcode = load_last_shortcode(args.instagram_username)
     posts_to_send: List[Post] = []
