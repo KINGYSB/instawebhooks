@@ -265,7 +265,8 @@ def fetch_new_posts(
             # First check if we hit the date limit
             if post.date < cutoff_date:
                 logger.warning(
-                    "Reached posts older than 7 days without finding last shortcode. Stopping."
+                    "Reached posts older than 7 days without "
+                    "finding last shortcode. Stopping."
                 )
                 break
 
