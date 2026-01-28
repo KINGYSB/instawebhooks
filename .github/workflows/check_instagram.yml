@@ -29,10 +29,9 @@ jobs:
           # Create the folder where Instaloader looks for sessions
           mkdir -p /home/runner/.config/instaloader
           # Turn your secret back into the session file
-          # We name it exactly 'session-fanofbri372'
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
-          # Verify the file exists for the logs
-          ls -l /home/runner/.config/instaloader/
+          # Verify the file is actually there so we can see it in logs
+          ls -la /home/runner/.config/instaloader/
 
       - name: Run Check
         env:
@@ -40,8 +39,8 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Use the -t flag to point directly to the session name
-          # This tells it to use the session for 'fanofbri372'
+          # We use -t fanofbri372 to force it to use that session file
+          # -p 1 ensures it only checks the most recent post
           instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372
           instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372
 
