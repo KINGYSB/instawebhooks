@@ -1,11 +1,11 @@
 name: InstaCheck
 on:
   schedule:
-    - cron: '0 * * * *' 
-  workflow_dispatch:
+    - cron: '0 * * * *'  # Runs every hour
+  workflow_dispatch:      # Allows you to click a button to test it manually
 
 permissions:
-  contents: write  # This allows GitHub to save the "memory" file
+  contents: write       # This is required so the "Save Memory" step works
 
 jobs:
   check-insta:
@@ -28,8 +28,9 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          instawebhooks --iterations 1 $USER1 $WEBHOOK
-          instawebhooks --iterations 1 $USER2 $WEBHOOK
+          # We use -p 1 to check only the latest post and avoid the regex error
+          instawebhooks $USER1 $WEBHOOK -p 1
+          instawebhooks $USER2 $WEBHOOK -p 1
 
       - name: Save Memory
         run: |
