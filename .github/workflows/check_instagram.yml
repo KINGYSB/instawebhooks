@@ -1,11 +1,11 @@
 name: InstaCheck
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour
-  workflow_dispatch:      # Allows you to test it manually
+    - cron: '0 * * * *' 
+  workflow_dispatch:
 
 permissions:
-  contents: write       # CRITICAL: Allows the bot to save memory files
+  contents: write
 
 jobs:
   check-insta:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Downloads full history to enable memory saving
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -28,13 +28,10 @@ jobs:
         env:
           SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
-          # 1. Setup the authentication session
           mkdir -p /home/runner/.config/instaloader
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
-
-          # 2. Restore memory files from the hidden folder
-          # We copy them to the root folder so the tool can see them
+          mkdir -p .memory
           cp .memory/last_post_*.txt . || echo "No previous memory files to restore."
 
       - name: Run Check
@@ -43,27 +40,20 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # We check the latest post (-p 1)
-          # We keep it silent (-c "") to avoid pings
-          instawebhooks $USER1 $WEBHOOK -p 1 -c ""
-          instawebhooks $USER2 $WEBHOOK -p 1 -c ""
+          # 'timeout 60s' forces the tool to stop after its first check.
+          # '|| true' ensures the workflow continues even when the tool is forced to stop.
+          timeout 60s instawebhooks $USER1 $WEBHOOK -p 1 -c "" || true
+          timeout 60s instawebhooks $USER2 $WEBHOOK -p 1 -c "" || true
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          
-          # 1. Ensure the folder exists
           mkdir -p .memory
-          
-          # 2. Move updated tracking files into the hidden folder
-          mv last_post_*.txt .memory/ || echo "No new post tracking files found."
-          
-          # 3. Add and Push changes back to GitHub
+          mv last_post_*.txt .memory/ || echo "No new posts to move."
           git add .memory/
-          
           if git diff --staged --quiet; then
-            echo "Memory is already up to date."
+            echo "Memory already up to date."
           else
             git commit -m "Automated memory update: Moved to .memory/"
             git push origin main
