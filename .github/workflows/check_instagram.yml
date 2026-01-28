@@ -26,12 +26,17 @@ jobs:
         env:
           SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
-          # Create the folder where Instaloader looks for sessions
+          # 1. Create the standard Linux config directory
           mkdir -p /home/runner/.config/instaloader
-          # Turn your secret back into the session file
+          
+          # 2. Decode the session file into that EXACT spot
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
-          # Place a copy in the local folder for redundancy
-          cp /home/runner/.config/instaloader/session-fanofbri372 ./session-fanofbri372
+          
+          # 3. Security: Set permissions so the tool can read it
+          chmod 600 /home/runner/.config/instaloader/session-fanofbri372
+          
+          # 4. Verify it's there
+          ls -la /home/runner/.config/instaloader/
 
       - name: Run Check
         env:
@@ -39,9 +44,10 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Use -t to point to the session file we restored
-          instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372
-          instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372
+          # NOTICE: We removed the -t flag entirely.
+          # The tool will now find the session-fanofbri372 file automatically.
+          instawebhooks $USER1 $WEBHOOK -p 1
+          instawebhooks $USER2 $WEBHOOK -p 1
 
       - name: Save Memory
         run: |
