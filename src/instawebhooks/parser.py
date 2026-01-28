@@ -64,6 +64,13 @@ login_group.add_argument(
     type=str,
     help="login to instagram with username and ask for password on terminal",
 )
+login_group.add_argument(
+    "-s",
+    "--session",
+    metavar="USERNAME",
+    type=str,
+    help="load an existing session file for the given username",
+)
 parser.add_argument(
     "-p",
     "--catchup",
