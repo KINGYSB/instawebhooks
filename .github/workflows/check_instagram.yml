@@ -43,10 +43,10 @@ jobs:
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Run the tool directly. It now handles reading/writing .memory/ files internally.
+          # Run the tool directly with --once.
           # catchup (-p 1) will only trigger if no memory file exists for that user.
-          timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" || true
-          timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" || true
+          instawebhooks $U1 $WEBHOOK -p 1 -c "" --once || true
+          instawebhooks $U2 $WEBHOOK -p 1 -c "" --once || true
 
       - name: Save Memory
         run: |

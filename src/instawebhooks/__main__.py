@@ -269,6 +269,9 @@ def main():
     try:
         while True:
             asyncio.run(check_for_new_posts())
+            if args.once:
+                logger.info("Run-once mode enabled. Exiting.")
+                break
             sleep(args.refresh_interval)
     except LoginRequiredException as login_exc:
         logger.critical("instaloader: error: %s", login_exc)
