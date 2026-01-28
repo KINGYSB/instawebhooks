@@ -43,51 +43,54 @@ jobs:
           U1: ${{ secrets.INSTA_USER }}
           U2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # 1. Fetch current IDs using the session file
-          # The -f flag tells instaloader to use your login data
-          SESSION="-f /home/runner/.config/instaloader/session-fanofbri372"
-
-          echo "Checking $U1..."
-          ID1=$(instaloader $SESSION --no-posts --count=1 $U1 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
+          # Function to check and post for a user
+          check_user() {
+            USERNAME=$1
+            MEMORY_FILE=".memory/last_post_${USERNAME}.txt"
+            
+            echo "Checking $USERNAME..."
+            
+            # Fetch the latest post shortcode using instaloader
+            SESSION="-f /home/runner/.config/instaloader/session-fanofbri372"
+            LATEST_POST=$(instaloader $SESSION --no-posts --count=1 $USERNAME 2>&1 | grep -oP '(?<=instagram\.com/p/)[A-Za-z0-9_-]+' | head -n 1 || echo "")
+            
+            if [ -z "$LATEST_POST" ]; then
+              echo "Could not fetch latest post for $USERNAME"
+              return
+            fi
+            
+            echo "Latest post shortcode: $LATEST_POST"
+            
+            # Check if this post shortcode is already in memory
+            if [ -f "$MEMORY_FILE" ] && grep -Fxq "$LATEST_POST" "$MEMORY_FILE"; then
+              echo "Post $LATEST_POST already sent for $USERNAME. Skipping."
+            else
+              echo "NEW post detected for $USERNAME! Sending webhook..."
+              timeout 60s instawebhooks $USERNAME $WEBHOOK -p 1 -c "" || true
+              
+              # Add to memory (append, not overwrite)
+              mkdir -p .memory
+              echo "$LATEST_POST" >> "$MEMORY_FILE"
+              echo "Saved $LATEST_POST to memory for $USERNAME."
+            fi
+            
+            # Small delay between users
+            sleep 10
+          }
           
-          # Small delay to prevent Instagram from flagging the runner IP
-          sleep 10
-
-          echo "Checking $U2..."
-          ID2=$(instaloader $SESSION --no-posts --count=1 $U2 2>&1 | grep -oP '(?<=_)[A-Za-z0-9_-]+(?=\.jpg)' | head -n 1)
-
-          # 2. Comparison Logic: Only post if the ID is NOT in memory
-          
-          # User 1 Check
-          if [ -n "$ID1" ] && [ "$ID1" != "$(cat last_post_$U1.txt 2>/dev/null)" ]; then
-            echo "NEW post detected for $U1 ($ID1)! Sending webhook..."
-            timeout 60s instawebhooks $U1 $WEBHOOK -p 1 -c "" || true
-            echo "$ID1" > last_post_$U1.txt
-          else
-            echo "No new posts or rate-limited for $U1. Memory: $(cat last_post_$U1.txt 2>/dev/null)"
-          fi
-
-          # User 2 Check
-          if [ -n "$ID2" ] && [ "$ID2" != "$(cat last_post_$U2.txt 2>/dev/null)" ]; then
-            echo "NEW post detected for $U2 ($ID2)! Sending webhook..."
-            timeout 60s instawebhooks $U2 $WEBHOOK -p 1 -c "" || true
-            echo "$ID2" > last_post_$U2.txt
-          else
-            echo "No new posts or rate-limited for $U2. Memory: $(cat last_post_$U2.txt 2>/dev/null)"
-          fi
+          # Check both users
+          check_user "$U1"
+          check_user "$U2"
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          mkdir -p .memory
-          mv last_post_*.txt .memory/ || echo "Nothing to save."
-          
           git add .memory/
           if git diff --staged --quiet; then
             echo "Memory already up to date."
           else
-            git commit -m "Automated memory update: Gatekeeper bypass with session"
+            git commit -m "Update posted Instagram IDs"
             git push origin main
           fi
