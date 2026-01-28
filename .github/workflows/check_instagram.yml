@@ -5,7 +5,7 @@ on:
   workflow_dispatch:      # Allows you to test it manually
 
 permissions:
-  contents: write       # CRITICAL: Allows the bot to save its memory
+  contents: write       # Allows the bot to save its memory back to the repo
 
 jobs:
   check-insta:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetches full history so it can push updates back
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -28,8 +28,11 @@ jobs:
         env:
           SESSION_DATA: ${{ secrets.IG_SESSION_DATA }}
         run: |
+          # Create the standard Linux config directory
           mkdir -p /home/runner/.config/instaloader
+          # Decode the session file into the default location
           echo "$SESSION_DATA" | base64 --decode > /home/runner/.config/instaloader/session-fanofbri372
+          # Ensure it has the correct permissions
           chmod 600 /home/runner/.config/instaloader/session-fanofbri372
 
       - name: Run Check
@@ -38,20 +41,20 @@ jobs:
           USER1: ${{ secrets.INSTA_USER }}
           USER2: ${{ secrets.INSTA_USER_2 }}
         run: |
-          # Checks latest post using the restored session
-          # -c "" ensures no everyone/here pings
-          instawebhooks $USER1 $WEBHOOK -p 1 -t fanofbri372 -c ""
-          instawebhooks $USER2 $WEBHOOK -p 1 -t fanofbri372 -c ""
+          # We removed the -t flag because it causes the password prompt error.
+          # The tool will find the session for fanofbri372 in the config folder automatically.
+          instawebhooks $USER1 $WEBHOOK -p 1 -c ""
+          instawebhooks $USER2 $WEBHOOK -p 1 -c ""
 
       - name: Save Memory
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Add tracking files (instawebhooks creates .txt files to track IDs)
-          git add *.txt || echo "No tracking files found yet"
+          # Add the tracking files (usually .txt) to git memory
+          git add *.txt || echo "No tracking files yet"
           
-          # Only commit and push if there is actually a new post to remember
+          # Only push if there's a new post to remember
           if git diff --staged --quiet; then
             echo "Nothing new to save."
           else
