@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import json
 import logging
 import os
 import random
@@ -134,25 +135,59 @@ def get_memory_path(username: str) -> str:
     return os.path.join(memory_dir, f"last_post_{username}.txt")
 
 
-def load_last_shortcode(username: str) -> str | None:
-    """Load the last processed shortcode from memory"""
+def load_last_shortcode(username: str) -> tuple[str | None, datetime | None]:
+    """Load the last processed shortcode and timestamp from memory
+
+    Returns:
+        tuple of (shortcode, timestamp) where either can be None
+        For backwards compatibility, returns (shortcode, None) for old text-only files
+    """
     path = get_memory_path(username)
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
-                return content if content else None
+                if not content:
+                    return None, None
+
+                # Try to parse as JSON first (new format)
+                try:
+                    data = json.loads(content)
+                    shortcode = data.get("shortcode")
+                    timestamp_str = data.get("timestamp")
+                    timestamp = None
+                    if timestamp_str:
+                        try:
+                            timestamp = datetime.fromisoformat(timestamp_str)
+                        except (ValueError, TypeError):
+                            logger.warning(
+                                "Failed to parse timestamp from memory file."
+                            )
+                    return shortcode, timestamp
+                except json.JSONDecodeError:
+                    # Backwards compatibility: assume it's plain text shortcode
+                    logger.debug(
+                        "Memory file contains plain text shortcode (legacy format)."
+                    )
+                    return content, None
         except IOError:
             logger.warning("Failed to read memory file.")
-    return None
+    return None, None
 
 
-def save_last_shortcode(username: str, shortcode: str):
-    """Save the last processed shortcode to memory"""
+def save_last_shortcode(username: str, shortcode: str, timestamp: datetime):
+    """Save the last processed shortcode and timestamp to memory in JSON format
+
+    Args:
+        username: Instagram username
+        shortcode: Post shortcode
+        timestamp: Post timestamp (datetime object with timezone info)
+    """
     path = get_memory_path(username)
     try:
+        data = {"shortcode": shortcode, "timestamp": timestamp.isoformat()}
         with open(path, "w", encoding="utf-8") as f:
-            f.write(shortcode)
+            json.dump(data, f)
     except IOError:
         logger.warning("Failed to write memory file.")
 
@@ -251,9 +286,22 @@ async def send_to_discord(post: Post):
 
 
 def fetch_new_posts(
-    posts, last_shortcode: str, posts_to_send: List[Post], limit: int = 50
+    posts,
+    last_shortcode: str,
+    posts_to_send: List[Post],
+    last_timestamp: datetime | None = None,
+    limit: int = 50,
 ) -> None:
-    """Fetch new posts until the last known shortcode is found."""
+    """Fetch new posts until the last known shortcode is found.
+
+    Args:
+        posts: Iterator of Instagram posts
+        last_shortcode: The shortcode of the last processed post
+        posts_to_send: List to append new posts to
+        last_timestamp: Optional timestamp of last processed post for
+            additional validation
+        limit: Maximum number of posts to fetch
+    """
     count = 0
     # Safety cut-off: Don't look back further than 7 days when resuming.
     # This prevents the bot from spamming if the 'last_shortcode' post was deleted
@@ -262,22 +310,54 @@ def fetch_new_posts(
 
     try:
         for post in posts:
+            logger.debug(
+                "Checking post %s (date: %s, shortcode: %s)",
+                post.shortcode,
+                post.date,
+                post.shortcode,
+            )
+
             # First check if we hit the date limit
             if post.date < cutoff_date:
                 logger.warning(
-                    "Reached posts older than 7 days without "
-                    "finding last shortcode. Stopping."
+                    "Reached posts older than 7 days (post date: %s, "
+                    "cutoff: %s) without finding last shortcode. Stopping.",
+                    post.date,
+                    cutoff_date,
+                )
+                break
+
+            # Check if timestamp indicates we've already processed this post
+            if last_timestamp and post.date <= last_timestamp:
+                logger.info(
+                    "Post %s has timestamp %s <= last_timestamp %s. Stopping.",
+                    post.shortcode,
+                    post.date,
+                    last_timestamp,
                 )
                 break
 
             if post.shortcode == last_shortcode:
+                logger.debug(
+                    "Found last processed shortcode %s. Stopping.", last_shortcode
+                )
                 break
 
             # Skip pinned posts, as they are not the newest posts
-            if post.is_pinned:
-                continue
+            # Use try-except in case is_pinned fails for reels or other post types
+            try:
+                if post.is_pinned:
+                    logger.debug("Skipping pinned post %s", post.shortcode)
+                    continue
+            except AttributeError:
+                logger.debug(
+                    "Post %s does not have is_pinned attribute (likely a reel)",
+                    post.shortcode,
+                )
+                # Continue processing if is_pinned is not available
 
             posts_to_send.append(post)
+            logger.debug("Added post %s to send queue", post.shortcode)
             count += 1
             if count >= limit:
                 logger.warning(
@@ -321,12 +401,16 @@ async def check_for_new_posts(catchup: int = args.catchup):
         )
         return
 
-    last_shortcode = load_last_shortcode(args.instagram_username)
+    last_shortcode, last_timestamp = load_last_shortcode(args.instagram_username)
     posts_to_send: List[Post] = []
 
     if last_shortcode:
-        logger.info("Resuming from last known post: %s", last_shortcode)
-        fetch_new_posts(posts, last_shortcode, posts_to_send)
+        logger.info(
+            "Resuming from last known post: %s (timestamp: %s)",
+            last_shortcode,
+            last_timestamp,
+        )
+        fetch_new_posts(posts, last_shortcode, posts_to_send, last_timestamp)
     else:
         since = datetime.now()
         until = datetime.now() - timedelta(seconds=args.refresh_interval)
@@ -347,7 +431,11 @@ async def check_for_new_posts(catchup: int = args.catchup):
         return
 
     async def send_post(post: Post):
-        logger.info("New post found: https://www.instagram.com/p/%s", post.shortcode)
+        logger.info(
+            "New post found: https://www.instagram.com/p/%s (date: %s)",
+            post.shortcode,
+            post.date,
+        )
         await send_to_discord(post)
 
     # Reverse the posts to send oldest first
@@ -355,7 +443,7 @@ async def check_for_new_posts(catchup: int = args.catchup):
         await send_post(post)
         # Save progress immediately after sending to prevent duplicates
         # if script crashes
-        save_last_shortcode(args.instagram_username, post.shortcode)
+        save_last_shortcode(args.instagram_username, post.shortcode, post.date)
         sleep(2)  # Avoid 30 requests per minute rate limit
 
 
