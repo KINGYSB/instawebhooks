@@ -417,9 +417,25 @@ async def check_for_new_posts(catchup: int = args.catchup):
 
         if catchup > 0:
             logger.info("Sending last %s posts on startup...", catchup)
-            for post in takewhile(lambda _: catchup > 0, posts):
+            for post in posts:
+                # Skip pinned posts during catchup too
+                try:
+                    if post.is_pinned:
+                        logger.debug(
+                            "Skipping pinned post during catchup: %s", post.shortcode
+                        )
+                        continue
+                except AttributeError:
+                    # Some post types (like reels) may not have is_pinned
+                    logger.debug(
+                        "Post %s has no is_pinned attribute, treating as non-pinned",
+                        post.shortcode,
+                    )
+
                 posts_to_send.append(post)
                 catchup -= 1
+                if catchup == 0:
+                    break
         else:
             for post in takewhile(
                 lambda p: p.date > until, dropwhile(lambda p: p.date > since, posts)
