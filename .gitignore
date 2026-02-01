@@ -162,4 +162,5 @@ cython_debug/
 #.idea/
 
 # Instaloader session files
-session-*
+session-*# Test memory files
+.memory/last_post_test_user.txt
