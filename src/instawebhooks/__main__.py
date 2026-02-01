@@ -137,7 +137,7 @@ def get_memory_path(username: str) -> str:
 
 def get_post_type_display(post: Post) -> tuple[str, str]:
     """Get the post type name and display name
-    
+
     Returns:
         tuple of (typename, display_name)
     """
@@ -156,7 +156,7 @@ def get_post_type_display(post: Post) -> tuple[str, str]:
 
 def load_memory(username: str) -> dict:
     """Load full memory structure with backwards compatibility for old format
-    
+
     Returns:
         dict with structure:
         {
@@ -176,10 +176,10 @@ def load_memory(username: str) -> dict:
                 "last_post_shortcode": None,
                 "last_post_timestamp": None,
                 "last_post_type": None,
-                "type_counts": {}
-            }
+                "type_counts": {},
+            },
         }
-    
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
@@ -192,26 +192,28 @@ def load_memory(username: str) -> dict:
                         "last_post_shortcode": None,
                         "last_post_timestamp": None,
                         "last_post_type": None,
-                        "type_counts": {}
-                    }
+                        "type_counts": {},
+                    },
                 }
-            
+
             # Try to parse as JSON
             try:
                 data = json.loads(content)
-                
+
                 # Check if this is the new format (has sent_posts)
                 if "sent_posts" in data:
-                    logger.debug("Loaded new memory format with %d sent posts", 
-                                len(data.get("sent_posts", [])))
+                    logger.debug(
+                        "Loaded new memory format with %d sent posts",
+                        len(data.get("sent_posts", [])),
+                    )
                     return data
-                
+
                 # Old format: {"shortcode": "...", "timestamp": "..."}
                 if "shortcode" in data:
                     logger.info("Migrating old memory format to new format")
                     shortcode = data.get("shortcode")
                     timestamp_str = data.get("timestamp")
-                    
+
                     # Parse timestamp and add timezone if missing
                     timestamp = None
                     if timestamp_str:
@@ -223,33 +225,41 @@ def load_memory(username: str) -> dict:
                                 logger.debug("Added UTC timezone to legacy timestamp")
                         except (ValueError, TypeError):
                             logger.warning("Failed to parse timestamp from old format")
-                    
+
                     # Create new format with single post
                     new_memory = {
                         "last_check": datetime.now(timezone.utc).isoformat(),
-                        "sent_posts": [
-                            {
-                                "shortcode": shortcode,
-                                "timestamp": timestamp.isoformat() if timestamp else None,
-                                "sent_at": datetime.now(timezone.utc).isoformat(),
-                                "type": "Unknown",
-                                "type_display": "Unknown",
-                                "is_video": False,
-                                "is_pinned": False,
-                                "caption_preview": "",
-                                "url": f"https://www.instagram.com/p/{shortcode}/"
-                            }
-                        ] if shortcode else [],
+                        "sent_posts": (
+                            [
+                                {
+                                    "shortcode": shortcode,
+                                    "timestamp": (
+                                        timestamp.isoformat() if timestamp else None
+                                    ),
+                                    "sent_at": datetime.now(timezone.utc).isoformat(),
+                                    "type": "Unknown",
+                                    "type_display": "Unknown",
+                                    "is_video": False,
+                                    "is_pinned": False,
+                                    "caption_preview": "",
+                                    "url": f"https://www.instagram.com/p/{shortcode}/",
+                                }
+                            ]
+                            if shortcode
+                            else []
+                        ),
                         "stats": {
                             "total_sent": 1 if shortcode else 0,
                             "last_post_shortcode": shortcode,
-                            "last_post_timestamp": timestamp.isoformat() if timestamp else None,
+                            "last_post_timestamp": (
+                                timestamp.isoformat() if timestamp else None
+                            ),
                             "last_post_type": "Unknown",
-                            "type_counts": {"Unknown": 1} if shortcode else {}
-                        }
+                            "type_counts": {"Unknown": 1} if shortcode else {},
+                        },
                     }
                     return new_memory
-                
+
                 # Unknown JSON format
                 logger.warning("Unknown memory format, starting fresh")
                 return {
@@ -260,10 +270,10 @@ def load_memory(username: str) -> dict:
                         "last_post_shortcode": None,
                         "last_post_timestamp": None,
                         "last_post_type": None,
-                        "type_counts": {}
-                    }
+                        "type_counts": {},
+                    },
                 }
-                
+
             except json.JSONDecodeError:
                 # Plain text shortcode (oldest format)
                 logger.info("Migrating plain text memory format to new format")
@@ -280,7 +290,7 @@ def load_memory(username: str) -> dict:
                             "is_video": False,
                             "is_pinned": False,
                             "caption_preview": "",
-                            "url": f"https://www.instagram.com/p/{shortcode}/"
+                            "url": f"https://www.instagram.com/p/{shortcode}/",
                         }
                     ],
                     "stats": {
@@ -288,8 +298,8 @@ def load_memory(username: str) -> dict:
                         "last_post_shortcode": shortcode,
                         "last_post_timestamp": None,
                         "last_post_type": "Unknown",
-                        "type_counts": {"Unknown": 1}
-                    }
+                        "type_counts": {"Unknown": 1},
+                    },
                 }
                 return new_memory
     except IOError:
@@ -302,14 +312,14 @@ def load_memory(username: str) -> dict:
                 "last_post_shortcode": None,
                 "last_post_timestamp": None,
                 "last_post_type": None,
-                "type_counts": {}
-            }
+                "type_counts": {},
+            },
         }
 
 
 def save_memory(username: str, memory_data: dict):
     """Save complete memory structure
-    
+
     Args:
         username: Instagram username
         memory_data: Complete memory dict structure
@@ -324,32 +334,32 @@ def save_memory(username: str, memory_data: dict):
 
 def add_sent_post(username: str, post: Post):
     """Add post to sent history with full metadata
-    
+
     Args:
         username: Instagram username
         post: Post object to add to history
     """
     memory = load_memory(username)
-    
+
     # Get post type information
     typename, type_display = get_post_type_display(post)
-    
+
     # Get caption preview (first 50 chars)
     caption = post.caption or ""
     caption_preview = caption[:50] + "..." if len(caption) > 50 else caption
-    
+
     # Get is_pinned status safely
     is_pinned = False
     try:
         is_pinned = post.is_pinned
     except AttributeError:
         pass
-    
+
     # Ensure post.date has timezone
     post_timestamp = post.date
     if post_timestamp.tzinfo is None:
         post_timestamp = post_timestamp.replace(tzinfo=timezone.utc)
-    
+
     # Create post entry
     post_entry = {
         "shortcode": post.shortcode,
@@ -360,42 +370,46 @@ def add_sent_post(username: str, post: Post):
         "is_video": post.is_video,
         "is_pinned": is_pinned,
         "caption_preview": caption_preview,
-        "url": f"https://www.instagram.com/p/{post.shortcode}/"
+        "url": f"https://www.instagram.com/p/{post.shortcode}/",
     }
-    
+
     # Add to sent_posts (newest first)
     memory["sent_posts"].insert(0, post_entry)
-    
+
     # Keep only last 100 posts
     memory["sent_posts"] = memory["sent_posts"][:100]
-    
+
     # Update stats
     memory["stats"]["total_sent"] = memory["stats"].get("total_sent", 0) + 1
     memory["stats"]["last_post_shortcode"] = post.shortcode
     memory["stats"]["last_post_timestamp"] = post_timestamp.isoformat()
     memory["stats"]["last_post_type"] = type_display
-    
+
     # Update type counts
     type_counts = memory["stats"].get("type_counts", {})
     type_counts[type_display] = type_counts.get(type_display, 0) + 1
     memory["stats"]["type_counts"] = type_counts
-    
+
     # Update last_check
     memory["last_check"] = datetime.now(timezone.utc).isoformat()
-    
+
     # Save memory
     save_memory(username, memory)
-    
-    logger.debug("Added %s %s to memory (total: %d)", 
-                 type_display, post.shortcode, len(memory["sent_posts"]))
+
+    logger.debug(
+        "Added %s %s to memory (total: %d)",
+        type_display,
+        post.shortcode,
+        len(memory["sent_posts"]),
+    )
 
 
 def get_sent_shortcodes(username: str) -> set:
     """Get set of all sent shortcodes for fast lookup
-    
+
     Args:
         username: Instagram username
-    
+
     Returns:
         set of shortcodes that have been sent
     """
@@ -516,7 +530,7 @@ def fetch_new_posts(
     # This prevents the bot from spamming if the 'last_shortcode' post was deleted
     # or if logic fails, avoiding re-sending years of history.
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=7)
-    
+
     # Get all sent shortcodes for fast lookup
     sent_shortcodes = get_sent_shortcodes(username)
     logger.debug("Loaded %d sent shortcodes from memory", len(sent_shortcodes))
@@ -524,10 +538,10 @@ def fetch_new_posts(
     try:
         for post in posts:
             checked += 1
-            
+
             # Get post type for logging
-            typename, type_display = get_post_type_display(post)
-            
+            _, type_display = get_post_type_display(post)
+
             logger.debug(
                 "Checking %s %s (date: %s, position: %d)",
                 type_display,
@@ -574,13 +588,15 @@ def fetch_new_posts(
 
             # This is a new post
             posts_to_send.append(post)
-            logger.debug("New %s found: %s (date: %s)", 
-                        type_display, post.shortcode, post.date)
+            logger.debug(
+                "New %s found: %s (date: %s)", type_display, post.shortcode, post.date
+            )
             count += 1
             if count >= limit:
                 logger.warning(
-                    "Reached post limit (%d) without finding all sent posts. Stopping fetch.",
-                    limit
+                    "Reached post limit (%d) without finding all sent posts. "
+                    "Stopping fetch.",
+                    limit,
                 )
                 break
     except (
@@ -596,7 +612,7 @@ def fetch_new_posts(
             "Stopping fetch for %s and processing gathered posts.",
             args.instagram_username,
         )
-    
+
     logger.info("Scan complete: checked %d posts, found %d new posts", checked, count)
 
 
@@ -627,7 +643,7 @@ async def check_for_new_posts(catchup: int = args.catchup):
 
     # Check if we have any sent posts in memory
     has_memory = len(memory.get("sent_posts", [])) > 0
-    
+
     if has_memory:
         last_shortcode = memory["stats"].get("last_post_shortcode")
         last_timestamp = memory["stats"].get("last_post_timestamp")
@@ -647,7 +663,7 @@ async def check_for_new_posts(catchup: int = args.catchup):
                 # Skip pinned posts during catchup too
                 try:
                     if post.is_pinned:
-                        typename, type_display = get_post_type_display(post)
+                        _, type_display = get_post_type_display(post)
                         logger.debug(
                             "Skipping pinned %s during catchup: %s",
                             type_display,
@@ -656,7 +672,7 @@ async def check_for_new_posts(catchup: int = args.catchup):
                         continue
                 except AttributeError:
                     # Some post types (like reels) may not have is_pinned
-                    typename, type_display = get_post_type_display(post)
+                    _, type_display = get_post_type_display(post)
                     logger.debug(
                         "%s %s has no is_pinned attribute, treating as non-pinned",
                         type_display,
@@ -681,7 +697,7 @@ async def check_for_new_posts(catchup: int = args.catchup):
         return
 
     async def send_post(post: Post):
-        typename, type_display = get_post_type_display(post)
+        _, type_display = get_post_type_display(post)
         logger.info(
             "New %s found: https://www.instagram.com/p/%s (date: %s)",
             type_display,
