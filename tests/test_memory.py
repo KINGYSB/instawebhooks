@@ -93,14 +93,16 @@ class TestMemorySystem:
     
     def test_save_and_load_new_format(self):
         """Test saving and loading new memory format"""
-        # Create new format memory
+        # Create new format memory with fixed timestamp
+        last_check_time = "2026-02-01T10:00:00+00:00"
+        sent_at_time = "2026-02-01T09:00:00+00:00"
         memory_data = {
-            "last_check": datetime.now(timezone.utc).isoformat(),
+            "last_check": last_check_time,
             "sent_posts": [
                 {
                     "shortcode": "POST123",
                     "timestamp": "2026-01-31T12:00:00+00:00",
-                    "sent_at": datetime.now(timezone.utc).isoformat(),
+                    "sent_at": sent_at_time,
                     "type": "GraphImage",
                     "type_display": "Photo",
                     "is_video": False,
@@ -127,6 +129,8 @@ class TestMemorySystem:
         assert loaded_memory["stats"]["total_sent"] == 1
         assert loaded_memory["stats"]["last_post_shortcode"] == "POST123"
         assert len(loaded_memory["sent_posts"]) == 1
+        assert loaded_memory["last_check"] == last_check_time
+        assert loaded_memory["sent_posts"][0]["sent_at"] == sent_at_time
     
     def test_add_sent_post(self):
         """Test adding a post to memory"""
@@ -156,6 +160,9 @@ class TestMemorySystem:
         assert memory["sent_posts"][0]["is_video"] is True, f"Expected is_video=True, got {memory['sent_posts'][0]['is_video']}"
         assert memory["stats"]["total_sent"] == 1, f"Expected total_sent=1, got {memory['stats']['total_sent']}"
         assert memory["stats"]["type_counts"]["Reel"] == 1, f"Expected Reel count=1, got {memory['stats']['type_counts'].get('Reel', 0)}"
+        # Verify last_check is set and is a valid ISO timestamp
+        assert memory["last_check"] is not None, "Expected last_check to be set"
+        assert "+00:00" in memory["last_check"], "Expected last_check to include timezone"
     
     def test_get_sent_shortcodes(self):
         """Test getting set of sent shortcodes"""
