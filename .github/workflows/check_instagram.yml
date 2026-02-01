@@ -23,8 +23,8 @@ jobs:
       
       - name: Install Tool
         run: |
-          # Install from local directory (.) to ensure memory fixes are used
-          pip install . 
+          # Force reinstall from local directory to get latest changes (no cache)
+          pip install --force-reinstall --no-cache-dir .
           pip install instaloader
 
       - name: Restore Session
