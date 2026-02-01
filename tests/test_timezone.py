@@ -39,8 +39,6 @@ class TestTimezoneFix:
         # This should not raise TypeError about comparing offset-naive and offset-aware datetimes
         try:
             fetch_new_posts(posts_iterator, "test_user", posts_to_send, limit=10)
-            # Test passes if no exception is raised
-            assert True, "Successfully compared timezone-aware datetimes"
         except TypeError as e:
             if "offset-naive and offset-aware" in str(e):
                 assert False, f"Timezone comparison failed: {e}"
@@ -68,9 +66,9 @@ class TestTimezoneFix:
         # Fetch new posts
         fetch_new_posts(posts_iterator, "test_user", posts_to_send, limit=10)
         
-        # Should stop at the 10-day old post and not include any posts
-        # (since there are no sent posts in memory, it should still collect the recent one)
-        # But the 10-day old post should cause the fetch to stop
+        # Should stop at the 10-day old post without including any posts,
+        # because the old post is encountered first and triggers the cutoff,
+        # stopping the iteration before the recent post is evaluated
         assert len(posts_to_send) == 0, f"Expected 0 posts, got {len(posts_to_send)}"
     
     def test_post_date_comparison_with_timezone_aware_cutoff(self):
