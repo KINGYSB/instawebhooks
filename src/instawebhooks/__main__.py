@@ -166,35 +166,28 @@ def load_memory(username: str) -> dict:
         }
         Returns empty dict if no memory exists
     """
+    # Default memory structure
+    default_memory: dict = {
+        "last_check": None,
+        "sent_posts": [],
+        "stats": {
+            "total_sent": 0,
+            "last_post_shortcode": None,
+            "last_post_timestamp": None,
+            "last_post_type": None,
+            "type_counts": {},
+        },
+    }
+
     path = get_memory_path(username)
     if not os.path.exists(path):
-        return {
-            "last_check": None,
-            "sent_posts": [],
-            "stats": {
-                "total_sent": 0,
-                "last_post_shortcode": None,
-                "last_post_timestamp": None,
-                "last_post_type": None,
-                "type_counts": {},
-            },
-        }
+        return default_memory
 
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
             if not content:
-                return {
-                    "last_check": None,
-                    "sent_posts": [],
-                    "stats": {
-                        "total_sent": 0,
-                        "last_post_shortcode": None,
-                        "last_post_timestamp": None,
-                        "last_post_type": None,
-                        "type_counts": {},
-                    },
-                }
+                return default_memory
 
             # Try to parse as JSON
             try:
@@ -227,7 +220,7 @@ def load_memory(username: str) -> dict:
                             logger.warning("Failed to parse timestamp from old format")
 
                     # Create new format with single post
-                    new_memory = {
+                    return {
                         "last_check": datetime.now(timezone.utc).isoformat(),
                         "sent_posts": (
                             [
@@ -258,27 +251,15 @@ def load_memory(username: str) -> dict:
                             "type_counts": {"Unknown": 1} if shortcode else {},
                         },
                     }
-                    return new_memory
 
-                # Unknown JSON format
+                # Unknown JSON format - fall through to return default_memory
                 logger.warning("Unknown memory format, starting fresh")
-                return {
-                    "last_check": None,
-                    "sent_posts": [],
-                    "stats": {
-                        "total_sent": 0,
-                        "last_post_shortcode": None,
-                        "last_post_timestamp": None,
-                        "last_post_type": None,
-                        "type_counts": {},
-                    },
-                }
 
             except json.JSONDecodeError:
                 # Plain text shortcode (oldest format)
                 logger.info("Migrating plain text memory format to new format")
                 shortcode = content
-                new_memory = {
+                return {
                     "last_check": datetime.now(timezone.utc).isoformat(),
                     "sent_posts": [
                         {
@@ -301,20 +282,10 @@ def load_memory(username: str) -> dict:
                         "type_counts": {"Unknown": 1},
                     },
                 }
-                return new_memory
     except IOError:
         logger.warning("Failed to read memory file")
-        return {
-            "last_check": None,
-            "sent_posts": [],
-            "stats": {
-                "total_sent": 0,
-                "last_post_shortcode": None,
-                "last_post_timestamp": None,
-                "last_post_type": None,
-                "type_counts": {},
-            },
-        }
+
+    return default_memory
 
 
 def save_memory(username: str, memory_data: dict):
