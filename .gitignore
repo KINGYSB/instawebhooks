@@ -163,3 +163,6 @@ cython_debug/
 
 # Instaloader session files
 session-*
+
+# Test memory files
+.memory/last_post_test_user.txt
