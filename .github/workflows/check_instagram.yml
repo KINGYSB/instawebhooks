@@ -48,6 +48,7 @@ jobs:
 
           # Run the tool directly with --once and --session
           instawebhooks $U1 $WEBHOOK -p 1 -c "" --once --session $SESSION_USER || true
+          sleep 60  # Wait 60 seconds between checks to avoid rate limiting
           instawebhooks $U2 $WEBHOOK -p 1 -c "" --once --session $SESSION_USER || true
 
       - name: Save Memory
